@@ -13,12 +13,16 @@ Pakeitimai įrašomi į tą pačią Google Sheets lentelę, iš kurios skaito pa
 
 ### 1. Atnaujinkite Apps Script
 1. Google Sheets → **Extensions → Apps Script**.
-2. Įklijuokite naują `google-apps-script.gs` turinį (jame jau yra `doPost` admin funkcijos).
+2. Įklijuokite naują `google-apps-script.gs` turinį (jame jau yra admin + nuotraukų įkėlimo funkcijos).
 3. Nustatykite **slaptažodį**:
    - **Project Settings** (krumpliaratis kairėje) → **Script properties** → **Add script property**
    - **Property:** `ADMIN_TOKEN`  **Value:** *(sugalvokite stiprų slaptažodį)*
    - Išsaugokite.
-4. **Deploy → Manage deployments → Edit (pieštukas) → Version: New version → Deploy.**
+4. **Suteikite Drive leidimą nuotraukoms (vienkartinis):**
+   - Redaktoriaus viršuje funkcijų sąraše pasirinkite **`authorize`** → **Run**.
+   - Patvirtinkite leidimus (jei rodo „Google hasn't verified this app" → **Advanced → Go to … → Allow**).
+   - Tai sukuria Drive aplanką **„Country Chef nuotraukos"**, kur saugomos įkeltos nuotraukos.
+5. **Deploy → Manage deployments → Edit (pieštukas) → Version: New version → Deploy.**
    (Web app URL nesikeičia.)
 
 ### 2. Atidarykite admin puslapį
@@ -40,7 +44,8 @@ Pakeitimai įrašomi į tą pačią Google Sheets lentelę, iš kurios skaito pa
 | **Redaguoti** | Prie gaminio „Keisti" → pakeisti → Išsaugoti. (ID nekeičiamas.) |
 | **Paslėpti / rodyti** | „Slėpti" / „Rodyti" – parduotuvėje gaminys dingsta/atsiranda. |
 | **Ištrinti** | „Trinti" (su patvirtinimu). |
-| **Nuotrauka** | Įklijuoti nuotraukos URL (matysite peržiūrą). |
+| **Nuotrauka (įkelti)** | „Įkelti nuotrauką" → pasirinkti failą. Sumažinama ir įkeliama į jūsų Google Drive; URL užsipildo automatiškai. Veikia ir iš telefono. |
+| **Nuotrauka (URL)** | Arba įklijuoti nuotraukos URL ranka (matysite peržiūrą). |
 
 Po kiekvieno veiksmo sąrašas automatiškai atsinaujina ir parodo realią lentelės būseną.
 

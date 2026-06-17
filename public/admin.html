@@ -85,6 +85,7 @@
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .muted-note{font-size:12px;color:var(--muted);margin-top:14px;text-align:center}
   .spin{display:inline-block;width:16px;height:16px;border:2px solid #fff5;border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite;vertical-align:-3px}
+  .spin.dark{border:2px solid #0002;border-top-color:var(--accent)}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
 </head>
@@ -136,8 +137,12 @@
     </div>
     <form id="prodForm" onsubmit="return saveProduct(event)">
       <div class="imgprev" id="imgPrev">🍖</div>
-      <label class="fld">Nuotraukos URL
-        <input name="image" type="url" placeholder="https://... arba images/pavadinimas.jpg" oninput="updPrev()">
+      <label class="fld">Įkelti nuotrauką (iš telefono ar kompiuterio)
+        <input type="file" id="imgFile" accept="image/*" onchange="uploadImage(this)">
+      </label>
+      <div id="upStatus" style="font-size:12.5px;font-weight:700;margin:-6px 0 12px;min-height:16px"></div>
+      <label class="fld">…arba nuotraukos URL (užsipildo automatiškai po įkėlimo)
+        <input name="image" type="url" placeholder="https://..." oninput="updPrev()">
       </label>
       <div class="row2">
         <label class="fld">ID (raktas, be tarpų) <span class="req">*</span>
@@ -199,19 +204,22 @@ var FIELDS = ['id','name','short','description','price','unit','max','ustep','ta
 
 document.getElementById('apiUrl').value = API;
 
-/* ---------- JSONP read (admin list, includes hidden) ---------- */
-function fetchAdmin(api, token){
+/* ---------- JSONP read (CORS-safe GET) ---------- */
+function jsonp(params, api){
+  api=api||API;
   return new Promise(function(resolve,reject){
-    var cb='__adm_'+Date.now();
+    var cb='__j_'+Date.now()+'_'+Math.floor(Math.random()*100000);
     var s=document.createElement('script');
     var t=setTimeout(function(){ cleanup(); reject(new Error('timeout')); }, 9000);
     function cleanup(){ clearTimeout(t); delete window[cb]; if(s.parentNode) s.parentNode.removeChild(s); }
     window[cb]=function(res){ cleanup(); resolve(res); };
     s.onerror=function(){ cleanup(); reject(new Error('network')); };
-    s.src=api+(api.indexOf('?')>-1?'&':'?')+'admin=1&token='+encodeURIComponent(token)+'&callback='+cb+'&_='+Date.now();
+    var q=Object.keys(params).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(params[k]); }).join('&');
+    s.src=api+(api.indexOf('?')>-1?'&':'?')+q+'&callback='+cb+'&_='+Date.now();
     document.head.appendChild(s);
   });
 }
+function fetchAdmin(api, token){ return jsonp({admin:'1', token:token}, api); }
 
 /* ---------- POST write (no-cors) ---------- */
 function postAction(params){
@@ -219,6 +227,62 @@ function postAction(params){
   body.set('token', TOKEN);
   Object.keys(params).forEach(function(k){ body.set(k, params[k]==null?'':params[k]); });
   return fetch(API, {method:'POST', mode:'no-cors', body:body});
+}
+
+/* ---------- Photo upload (compress -> Drive via Apps Script) ---------- */
+function compressImage(file, maxDim, quality){
+  return new Promise(function(resolve, reject){
+    var reader=new FileReader();
+    reader.onerror=function(){ reject(new Error('read')); };
+    reader.onload=function(){
+      var img=new Image();
+      img.onerror=function(){ reject(new Error('decode')); };
+      img.onload=function(){
+        var w=img.width, h=img.height;
+        if(Math.max(w,h)>maxDim){
+          if(w>=h){ h=Math.round(h*maxDim/w); w=maxDim; }
+          else { w=Math.round(w*maxDim/h); h=maxDim; }
+        }
+        var c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg', quality));
+      };
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function pollUpload(id, tries){
+  tries=tries||0;
+  return jsonp({uploadResult:id, token:TOKEN}).then(function(res){
+    if(res && res.ok && res.url) return res.url;
+    if(res && res.ok===false && res.pending!==true) throw new Error(res.error||'fail');
+    if(tries>15) throw new Error('timeout');
+    return new Promise(function(r){ setTimeout(r,1300); }).then(function(){ return pollUpload(id, tries+1); });
+  });
+}
+function uploadImage(input){
+  var file=input.files && input.files[0];
+  if(!file) return;
+  var st=document.getElementById('upStatus');
+  st.style.color='var(--muted)';
+  st.innerHTML='<span class="spin dark"></span> Apdorojama…';
+  compressImage(file, 1000, 0.82).then(function(dataUrl){
+    var base64=dataUrl.split(',')[1];
+    var id='u'+Date.now()+Math.floor(Math.random()*10000);
+    st.innerHTML='<span class="spin dark"></span> Įkeliama į Drive…';
+    return postAction({ action:'upload', uploadId:id,
+      filename:(file.name||'photo').replace(/\.[^.]+$/,'')+'.jpg', mime:'image/jpeg', data:base64 })
+      .then(function(){ return pollUpload(id); });
+  }).then(function(url){
+    var f=document.getElementById('prodForm');
+    f.image.value=url; updPrev();
+    st.style.color='var(--accent)';
+    st.textContent='✓ Nuotrauka įkelta';
+  }).catch(function(){
+    st.style.color='var(--brand)';
+    st.textContent='Nepavyko įkelti. Galite įklijuoti nuotraukos URL ranka.';
+  });
 }
 
 /* ---------- Login ---------- */
@@ -302,6 +366,8 @@ function openEdit(id){
   });
   f.active.checked=p?isOn(p):true;
   f.id.readOnly=!!p; // ID nekeičiamas redaguojant
+  var imgFile=document.getElementById('imgFile'); if(imgFile) imgFile.value='';
+  document.getElementById('upStatus').textContent='';
   updPrev();
   document.getElementById('overlay').classList.add('open');
 }
