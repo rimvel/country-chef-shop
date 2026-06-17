@@ -1,0 +1,12 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local tooling
+.claude/
+node_modules/
+
+# Unrelated files (not part of the shop)
+vied.html
+viedara.html
